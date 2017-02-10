@@ -1,0 +1,25 @@
+mode: set
+github.com\mushroomsir\session-redis\sessionredis.go:36.51,43.22 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:46.2,54.8 3 1
+github.com\mushroomsir\session-redis\sessionredis.go:43.22,45.3 1 0
+github.com\mushroomsir\session-redis\sessionredis.go:58.80,60.53 1 1
+github.com\mushroomsir\session-redis\sessionredis.go:65.2,66.8 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:60.53,62.3 1 0
+github.com\mushroomsir\session-redis\sessionredis.go:62.3,64.3 1 1
+github.com\mushroomsir\session-redis\sessionredis.go:70.80,72.16 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:75.2,76.16 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:79.2,80.16 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:83.2,84.8 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:72.16,74.3 1 1
+github.com\mushroomsir\session-redis\sessionredis.go:76.16,78.3 1 0
+github.com\mushroomsir\session-redis\sessionredis.go:80.16,82.3 1 0
+github.com\mushroomsir\session-redis\sessionredis.go:88.81,90.16 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:93.2,94.16 2 1
+github.com\mushroomsir\session-redis\sessionredis.go:97.2,100.16 4 1
+github.com\mushroomsir\session-redis\sessionredis.go:103.2,110.8 3 1
+github.com\mushroomsir\session-redis\sessionredis.go:90.16,92.3 1 0
+github.com\mushroomsir\session-redis\sessionredis.go:94.16,96.3 1 0
+github.com\mushroomsir\session-redis\sessionredis.go:100.16,102.3 1 0
+github.com\mushroomsir\session-redis\sessionredis.go:114.32,117.34 3 1
+github.com\mushroomsir\session-redis\sessionredis.go:121.2,124.95 3 1
+github.com\mushroomsir\session-redis\sessionredis.go:117.34,119.3 1 0
