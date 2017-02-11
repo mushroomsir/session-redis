@@ -68,13 +68,13 @@ func (c *RedisStore) Get(name string, w http.ResponseWriter, r *http.Request, si
 	if len(signed) > 0 {
 		b = signed[0]
 	}
-	session = sessions.NewSession(name, c, w, r, b)
 	var cookies *cookie.Cookies
 	if len(c.opts.Keys) > 0 && len(c.opts.Keys[0]) > 0 {
 		cookies = cookie.New(w, r, c.opts.Keys)
 	} else {
 		cookies = cookie.New(w, r)
 	}
+	session = sessions.NewSession(name, c, cookies, b)
 	sid, _ := cookies.Get(name, b)
 	if sid != "" {
 		val, rediserror := c.client.Get(sid).Result()
@@ -86,18 +86,17 @@ func (c *RedisStore) Get(name string, w http.ResponseWriter, r *http.Request, si
 			return nil, decodeerror
 		}
 		err = json.Unmarshal(b, &session.Values)
+	} else {
+		sid, _ = NewUUID()
 	}
+	session.SID = sid
 	session.SetCache(session.Values)
 	return
 }
 
 // Save session to Response's cookie
-func (c *RedisStore) Save(w http.ResponseWriter, r *http.Request, session *sessions.Session) (err error) {
+func (c *RedisStore) Save(session *sessions.Session) (err error) {
 	if session.IsCache() {
-		return
-	}
-	sid, err := NewUUID()
-	if err != nil {
 		return
 	}
 	b, err := json.Marshal(session.Values)
@@ -105,7 +104,7 @@ func (c *RedisStore) Save(w http.ResponseWriter, r *http.Request, session *sessi
 		return
 	}
 	val := base64.StdEncoding.EncodeToString(b)
-	err = c.client.Set(sid, val, c.opts.Expiration).Err()
+	err = c.client.Set(session.SID, val, c.opts.Expiration).Err()
 	if err != nil {
 		return
 	}
@@ -115,21 +114,14 @@ func (c *RedisStore) Save(w http.ResponseWriter, r *http.Request, session *sessi
 		Signed:   session.IsSigned(),
 		MaxAge:   int(c.opts.Expiration / time.Second),
 	}
-	if len(c.opts.Keys) > 0 && len(c.opts.Keys[0]) > 0 {
-		cookie.New(w, r, c.opts.Keys).Set(session.Name(), sid, opts)
-	} else {
-		cookie.New(w, r).Set(session.Name(), sid, opts)
-	}
+	session.GetCookie().Set(session.Name(), session.SID, opts)
 	return
 }
 
 // NewUUID generates a random UUID according to RFC 4122
 func NewUUID() (string, error) {
 	uuid := make([]byte, 16)
-	n, err := io.ReadFull(rand.Reader, uuid)
-	if n != len(uuid) || err != nil {
-		return "", err
-	}
+	io.ReadFull(rand.Reader, uuid)
 	uuid[8] = uuid[8]&^0xc0 | 0x80
 	uuid[6] = uuid[6]&^0xf0 | 0x40
 	return fmt.Sprintf("%x%x%x%x%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
