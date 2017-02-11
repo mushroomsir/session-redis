@@ -17,8 +17,8 @@ import (
 
 // Options ...
 type Options struct {
-	addr       string
-	keys       []string
+	Addr       string
+	Keys       []string
 	Expiration time.Duration
 	DB         int
 	Password   string
@@ -36,17 +36,26 @@ type RedisStore struct {
 func New(options ...*Options) (store *RedisStore) {
 	opts := &Options{
 		Expiration: 24 * time.Hour,
-		keys:       nil,
+		Keys:       nil,
 		DB:         0, // use default DB
-		addr:       "127.0.0.1:6379",
+		Addr:       "127.0.0.1:6379",
 	}
 	if len(options) > 0 {
-		opts = options[0]
+		options := options[0]
+		if options.Expiration > time.Second {
+			opts.Expiration = options.Expiration
+		}
+		opts.Keys = options.Keys
+		opts.DB = options.DB
+		opts.Password = options.Password
+		if options.Addr != "" {
+			opts.Addr = options.Addr
+		}
 	}
 	store = &RedisStore{opts: opts}
 
 	store.client = redis.NewClient(&redis.Options{
-		Addr:     opts.addr,
+		Addr:     opts.Addr,
 		Password: opts.Password,
 		DB:       opts.DB,
 	})
@@ -56,9 +65,8 @@ func New(options ...*Options) (store *RedisStore) {
 
 // Init an CookieStore instance
 func (c *RedisStore) Init(w http.ResponseWriter, r *http.Request, signed bool) {
-
-	if len(c.opts.keys) > 0 && len(c.opts.keys[0]) > 0 {
-		c.cookie = cookie.New(w, r, c.opts.keys)
+	if len(c.opts.Keys) > 0 && len(c.opts.Keys[0]) > 0 {
+		c.cookie = cookie.New(w, r, c.opts.Keys)
 	} else {
 		c.cookie = cookie.New(w, r)
 	}
@@ -68,19 +76,18 @@ func (c *RedisStore) Init(w http.ResponseWriter, r *http.Request, signed bool) {
 
 // Get existed session from Request's cookies
 func (c *RedisStore) Get(name string) (data map[string]interface{}, err error) {
-	sid, err := c.cookie.Get(name, c.signed)
-	if err != nil {
-		return
+	sid, _ := c.cookie.Get(name, c.signed)
+	if sid != "" {
+		val, rediserror := c.client.Get(sid).Result()
+		if err != nil {
+			return nil, rediserror
+		}
+		b, decodeerror := base64.StdEncoding.DecodeString(val)
+		if decodeerror != nil {
+			return nil, decodeerror
+		}
+		err = json.Unmarshal(b, &data)
 	}
-	val, err := c.client.Get(sid).Result()
-	if err != nil {
-		return
-	}
-	b, err := base64.StdEncoding.DecodeString(val)
-	if err != nil {
-		return
-	}
-	err = json.Unmarshal(b, &data)
 	return
 }
 
