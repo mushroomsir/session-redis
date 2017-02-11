@@ -17,9 +17,11 @@ func main() {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		session, _ := store.Get(sessionkey, w, r)
-
-		session.Values["name"] = "mushroom"
-
+		if val, ok := session.Values["name"]; ok {
+			println(val)
+		} else {
+			session.Values["name"] = "mushroom"
+		}
 		session.Save()
 
 	})
