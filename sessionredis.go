@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/go-http-utils/cookie"
+	"github.com/go-http-utils/cookie-session"
 
 	"time"
 
@@ -24,12 +25,10 @@ type Options struct {
 	Password   string
 }
 
-//RedisStore ...
+//RedisStore backend for cookie-session
 type RedisStore struct {
 	opts   *Options
 	client *redis.Client
-	cookie *cookie.Cookies
-	signed bool
 }
 
 // New an CookieStore instance
@@ -63,20 +62,20 @@ func New(options ...*Options) (store *RedisStore) {
 	return
 }
 
-// Init an CookieStore instance
-func (c *RedisStore) Init(w http.ResponseWriter, r *http.Request, signed bool) {
-	if len(c.opts.Keys) > 0 && len(c.opts.Keys[0]) > 0 {
-		c.cookie = cookie.New(w, r, c.opts.Keys)
-	} else {
-		c.cookie = cookie.New(w, r)
-	}
-	c.signed = signed
-	return
-}
-
 // Get existed session from Request's cookies
-func (c *RedisStore) Get(name string) (data map[string]interface{}, err error) {
-	sid, _ := c.cookie.Get(name, c.signed)
+func (c *RedisStore) Get(name string, w http.ResponseWriter, r *http.Request, signed ...bool) (session *sessions.Session, err error) {
+	b := false
+	if len(signed) > 0 {
+		b = signed[0]
+	}
+	session = sessions.NewSession(name, c, w, r, b)
+	var cookies *cookie.Cookies
+	if len(c.opts.Keys) > 0 && len(c.opts.Keys[0]) > 0 {
+		cookies = cookie.New(w, r, c.opts.Keys)
+	} else {
+		cookies = cookie.New(w, r)
+	}
+	sid, _ := cookies.Get(name, b)
 	if sid != "" {
 		val, rediserror := c.client.Get(sid).Result()
 		if err != nil {
@@ -86,34 +85,41 @@ func (c *RedisStore) Get(name string) (data map[string]interface{}, err error) {
 		if decodeerror != nil {
 			return nil, decodeerror
 		}
-		err = json.Unmarshal(b, &data)
+		err = json.Unmarshal(b, &session.Values)
 	}
+	session.SetCache(session.Values)
 	return
 }
 
 // Save session to Response's cookie
-func (c *RedisStore) Save(name string, data map[string]interface{}) (err error) {
+func (c *RedisStore) Save(w http.ResponseWriter, r *http.Request, session *sessions.Session) (err error) {
+	if session.IsCache() {
+		return
+	}
 	sid, err := NewUUID()
 	if err != nil {
 		return
 	}
-	b, err := json.Marshal(data)
+	b, err := json.Marshal(session.Values)
 	if err != nil {
 		return
 	}
 	val := base64.StdEncoding.EncodeToString(b)
-	cmd := c.client.Set(sid, val, c.opts.Expiration)
-	err = cmd.Err()
+	err = c.client.Set(sid, val, c.opts.Expiration).Err()
 	if err != nil {
 		return
 	}
 	opts := &cookie.Options{
 		Path:     "/",
 		HTTPOnly: true,
-		Signed:   c.signed,
+		Signed:   session.IsSigned(),
 		MaxAge:   int(c.opts.Expiration / time.Second),
 	}
-	c.cookie.Set(name, sid, opts)
+	if len(c.opts.Keys) > 0 && len(c.opts.Keys[0]) > 0 {
+		cookie.New(w, r, c.opts.Keys).Set(session.Name(), sid, opts)
+	} else {
+		cookie.New(w, r).Set(session.Name(), sid, opts)
+	}
 	return
 }
 
@@ -124,9 +130,7 @@ func NewUUID() (string, error) {
 	if n != len(uuid) || err != nil {
 		return "", err
 	}
-	// variant bits; see section 4.1.1
 	uuid[8] = uuid[8]&^0xc0 | 0x80
-	// version 4 (pseudo-random); see section 4.1.3
 	uuid[6] = uuid[6]&^0xf0 | 0x40
 	return fmt.Sprintf("%x%x%x%x%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
 }

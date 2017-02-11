@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/go-http-utils/cookie-session"
 	sessionredis "github.com/mushroomsir/session-redis"
 )
 
@@ -17,7 +16,7 @@ func main() {
 	recorder := httptest.NewRecorder()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-		session, _ := sessions.New(sessionkey, store, w, r)
+		session, _ := store.Get(sessionkey, w, r)
 
 		session.Values["name"] = "mushroom"
 
@@ -29,7 +28,7 @@ func main() {
 	cookies, _ := getCookie(sessionkey, recorder)
 	req.AddCookie(cookies)
 	handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session, _ := sessions.New(sessionkey, store, w, r)
+		session, _ := store.Get(sessionkey, w, r)
 
 		println(session.Values["name"].(string))
 	})
