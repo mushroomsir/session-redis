@@ -54,7 +54,6 @@ func TestRedisStore(t *testing.T) {
 
 	t.Run("RedisStore with custom options that should be", func(t *testing.T) {
 		store := sessionredis.New(&sessionredis.Options{
-			Keys:       []string{"key"},
 			Expiration: 24 * time.Hour,
 			DB:         0, // use default DB
 			Addr:       "127.0.0.1:6379",
@@ -79,7 +78,6 @@ func TestRedisStore(t *testing.T) {
 
 		//======reuse=====
 		store = sessionredis.New(&sessionredis.Options{
-			Keys:       []string{"key"},
 			Expiration: 24 * time.Hour,
 			DB:         0, // use default DB
 			Addr:       "127.0.0.1:6379",
@@ -95,10 +93,10 @@ func TestRedisStore(t *testing.T) {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			session, err := store.Get(cookiekey, w, r)
-
+			assert.Nil(err)
+			assert.NotNil(session.Values)
 			assert.Equal("mushroom", session.Values["name"])
 			assert.Equal(float64(99), session.Values["num"])
-			assert.Nil(err)
 		})
 		handler.ServeHTTP(recorder, req)
 
@@ -146,13 +144,13 @@ func TestRedisStore(t *testing.T) {
 
 		req, _ := http.NewRequest("GET", "/", nil)
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r, true)
+			session, err := store.Get(cookiekey, w, r)
 			session.Values["name"] = "mushroom"
 			session.Values["num"] = 99
 			session.Save()
 			assert.Nil(err)
 
-			session, err = store.Get(cookieNewKey, w, r, true)
+			session, err = store.Get(cookieNewKey, w, r)
 			session.Values["name"] = "mushroom-n"
 			session.Values["num"] = 100
 			session.Save()
@@ -161,7 +159,9 @@ func TestRedisStore(t *testing.T) {
 		handler.ServeHTTP(recorder, req)
 
 		//======reuse=====
-
+		store = sessionredis.New(&sessionredis.Options{
+			Keys: []string{"key"},
+		})
 		req, _ = http.NewRequest("GET", "/", nil)
 		cookies, _ := getCookie(cookiekey, recorder)
 		req.AddCookie(cookies)
@@ -177,18 +177,18 @@ func TestRedisStore(t *testing.T) {
 			Keys: []string{"key"},
 		})
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r, true)
+			session, err := store.Get(cookiekey, w, r)
 
 			assert.Nil(err)
 			assert.Equal("mushroom", session.Values["name"])
 			assert.Equal(float64(99), session.Values["num"])
 
-			session, err = store.Get(cookieNewKey, w, r, true)
+			session, err = store.Get(cookieNewKey, w, r)
 			assert.Nil(err)
 			assert.Equal("mushroom-n", session.Values["name"])
 			assert.Equal(float64(100), session.Values["num"])
 
-			session, err = store.Get(cookieNewKey+"new", w, r, true)
+			session, err = store.Get(cookieNewKey+"new", w, r)
 			assert.Nil(err)
 			assert.Equal(0, len(session.Values))
 
@@ -196,7 +196,9 @@ func TestRedisStore(t *testing.T) {
 		handler.ServeHTTP(recorder, req)
 
 		//======reuse=====
-
+		store = sessionredis.New(&sessionredis.Options{
+			Keys: []string{"key"},
+		})
 		req, _ = http.NewRequest("GET", "/", nil)
 		cookies, _ = getCookie(cookiekey, recorder)
 		req.AddCookie(cookies)
@@ -212,18 +214,18 @@ func TestRedisStore(t *testing.T) {
 			Keys: []string{"key"},
 		})
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r, true)
+			session, err := store.Get(cookiekey, w, r)
 
 			assert.Nil(err)
 			assert.Equal("mushroom", session.Values["name"])
 			assert.Equal(float64(99), session.Values["num"])
 
-			session, err = store.Get(cookieNewKey, w, r, true)
+			session, err = store.Get(cookieNewKey, w, r)
 			assert.Nil(err)
 			assert.Equal("mushroom-n", session.Values["name"])
 			assert.Equal(float64(100), session.Values["num"])
 
-			session, err = store.Get(cookieNewKey+"new", w, r, true)
+			session, err = store.Get(cookieNewKey+"new", w, r)
 			assert.Nil(err)
 			assert.Equal(0, len(session.Values))
 

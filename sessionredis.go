@@ -2,11 +2,10 @@ package sessionredis
 
 import (
 	"crypto/rand"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 
 	"github.com/go-http-utils/cookie"
 	"github.com/go-http-utils/cookie-session"
@@ -29,13 +28,14 @@ type Options struct {
 type RedisStore struct {
 	opts   *Options
 	client *redis.Client
+	signed bool
 }
 
 // New an CookieStore instance
 func New(options ...*Options) (store *RedisStore) {
 	opts := &Options{
 		Expiration: 24 * time.Hour,
-		Keys:       nil,
+		Keys:       []string{},
 		DB:         0, // use default DB
 		Addr:       "127.0.0.1:6379",
 	}
@@ -44,7 +44,9 @@ func New(options ...*Options) (store *RedisStore) {
 		if options.Expiration > time.Second {
 			opts.Expiration = options.Expiration
 		}
-		opts.Keys = options.Keys
+		if options.Keys != nil {
+			opts.Keys = options.Keys
+		}
 		opts.DB = options.DB
 		opts.Password = options.Password
 		if options.Addr != "" {
@@ -52,6 +54,9 @@ func New(options ...*Options) (store *RedisStore) {
 		}
 	}
 	store = &RedisStore{opts: opts}
+	if len(opts.Keys) > 0 && len(opts.Keys[0]) > 0 {
+		store.signed = true
+	}
 
 	store.client = redis.NewClient(&redis.Options{
 		Addr:     opts.Addr,
@@ -63,47 +68,35 @@ func New(options ...*Options) (store *RedisStore) {
 }
 
 // Get existed session from Request's cookies
-func (c *RedisStore) Get(name string, w http.ResponseWriter, r *http.Request, signed ...bool) (session *sessions.Session, err error) {
-	b := false
-	if len(signed) > 0 {
-		b = signed[0]
-	}
-	var cookies *cookie.Cookies
-	if len(c.opts.Keys) > 0 && len(c.opts.Keys[0]) > 0 {
-		cookies = cookie.New(w, r, c.opts.Keys)
-	} else {
-		cookies = cookie.New(w, r)
-	}
-	session = sessions.NewSession(name, c, cookies, b)
-	sid, _ := cookies.Get(name, b)
+func (c *RedisStore) Get(name string, w http.ResponseWriter, r *http.Request) (session *sessions.Session, err error) {
+	cookies := cookie.New(w, r, c.opts.Keys)
+	session = sessions.NewSession(name, c, w, r)
+
+	sid, _ := cookies.Get(name, c.signed)
 	if sid != "" {
 		val, rediserror := c.client.Get(sid).Result()
-		if err != nil {
-			return nil, rediserror
+		if rediserror != nil {
+			err = rediserror
+			return
 		}
-		b, decodeerror := base64.StdEncoding.DecodeString(val)
-		if decodeerror != nil {
-			return nil, decodeerror
-		}
-		err = json.Unmarshal(b, &session.Values)
+		err = sessions.Decode(val, &session.Values)
 	} else {
 		sid, _ = NewUUID()
 	}
 	session.SID = sid
-	session.SetCache(session.Values)
+	session.AddCache("lastval", session.Values)
 	return
 }
 
 // Save session to Response's cookie
-func (c *RedisStore) Save(session *sessions.Session) (err error) {
-	if session.IsCache() {
+func (c *RedisStore) Save(w http.ResponseWriter, r *http.Request, session *sessions.Session) (err error) {
+	if reflect.DeepEqual(session.GetCache("lastval"), session.Values) {
 		return
 	}
-	b, err := json.Marshal(session.Values)
+	val, err := sessions.Encode(session.Values)
 	if err != nil {
 		return
 	}
-	val := base64.StdEncoding.EncodeToString(b)
 	err = c.client.Set(session.SID, val, c.opts.Expiration).Err()
 	if err != nil {
 		return
@@ -111,10 +104,11 @@ func (c *RedisStore) Save(session *sessions.Session) (err error) {
 	opts := &cookie.Options{
 		Path:     "/",
 		HTTPOnly: true,
-		Signed:   session.IsSigned(),
+		Signed:   c.signed,
 		MaxAge:   int(c.opts.Expiration / time.Second),
 	}
-	session.GetCookie().Set(session.Name(), session.SID, opts)
+	cookies := cookie.New(w, r, c.opts.Keys)
+	cookies.Set(session.Name(), session.SID, opts)
 	return
 }
 
