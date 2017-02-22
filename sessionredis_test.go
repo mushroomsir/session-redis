@@ -6,14 +6,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-http-utils/cookie"
+	"github.com/go-http-utils/cookie-session"
 	sessionredis "github.com/mushroomsir/session-redis"
 	"github.com/stretchr/testify/assert"
 )
 
+// Session ...
+type Session struct {
+	*sessions.Meta `json:"-"`
+	UserID         string `json:"userId"`
+	Name           string `json:"name"`
+	Age            int64  `json:"authed"`
+}
+
+// Save ...
+func (s *Session) Save() error {
+	return s.SaveIt(s)
+}
+
 func TestRedisStore(t *testing.T) {
 
-	cookiekey := "cookiekey"
-	cookieNewKey := "cookiekeynew"
+	SessionName := "Sess"
+	SessionKeys := []string{"keyxxx"}
+	NewSessionName := "NewSess"
+
 	t.Run("RedisStore with default options that should be", func(t *testing.T) {
 
 		assert := assert.New(t)
@@ -22,81 +39,84 @@ func TestRedisStore(t *testing.T) {
 
 		store := sessionredis.New()
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r)
-			session.Values["name"] = "mushroom"
-			session.Values["num"] = 99
-			assert.Nil(err)
+
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			if session.UserID == "" {
+				session.UserID = "123465"
+				session.Name = "mushroom"
+				session.Age = 18
+			}
 			err = session.Save()
 			assert.Nil(err)
-
 		})
 		handler.ServeHTTP(recorder, req)
 
-		//======reuse=====
-		cookies, err := getCookie(cookiekey, recorder)
-		assert.Nil(err)
-		assert.NotNil(cookies.Value)
+		//====== reuse session =====
 		req, err = http.NewRequest("GET", "/", nil)
-		req.AddCookie(cookies)
+		migrateCookies(recorder, req)
 
 		store = sessionredis.New()
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			session, err := store.Get(cookiekey, w, r)
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
 
-			assert.Equal("mushroom", session.Values["name"])
-			assert.Equal(float64(99), session.Values["num"])
-			assert.Nil(err)
+			assert.Equal("123465", session.UserID)
+			assert.Equal("mushroom", session.Name)
+			assert.Equal(int64(18), session.Age)
 		})
 		handler.ServeHTTP(recorder, req)
-
 	})
 
 	t.Run("RedisStore with custom options that should be", func(t *testing.T) {
+		assert := assert.New(t)
+
 		store := sessionredis.New(&sessionredis.Options{
 			Expiration: 24 * time.Hour,
 			DB:         0, // use default DB
 			Addr:       "127.0.0.1:6379",
 		})
 
-		assert := assert.New(t)
-		req, err := http.NewRequest("GET", "/", nil)
+		req, _ := http.NewRequest("GET", "/", nil)
 		recorder := httptest.NewRecorder()
-		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r)
 
-			session.Values["name"] = "mushroom"
-			session.Values["num"] = 99
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			if session.UserID == "" {
+				session.UserID = "1234654"
+				session.Name = "mushroom"
+				session.Age = 19
+			}
 			session.Save()
 
-			assert.Nil(err)
-			session, err = store.Get(cookiekey+"error", w, r)
-			assert.Nil(err)
-			assert.Equal(0, len(session.Values))
+			session = &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName+"error", session, cookie.New(w, r, SessionKeys))
+
+			assert.Equal(int64(0), session.Age)
+			assert.Equal("", session.UserID)
+			assert.Equal("", session.Name)
 		})
 		handler.ServeHTTP(recorder, req)
 
-		//======reuse=====
+		//====== reuse session =====
+		req, _ = http.NewRequest("GET", "/", nil)
+		migrateCookies(recorder, req)
+
 		store = sessionredis.New(&sessionredis.Options{
 			Expiration: 24 * time.Hour,
 			DB:         0, // use default DB
 			Addr:       "127.0.0.1:6379",
 		})
-		cookies, err := getCookie(cookiekey, recorder)
-		assert.Nil(err)
-		assert.NotNil(cookies.Value)
-		t.Log(cookies.Value)
-		req, err = http.NewRequest("GET", "/", nil)
-
-		req.AddCookie(cookies)
-
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
-			session, err := store.Get(cookiekey, w, r)
-			assert.Nil(err)
-			assert.NotNil(session.Values)
-			assert.Equal("mushroom", session.Values["name"])
-			assert.Equal(float64(99), session.Values["num"])
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+
+			assert.Equal("1234654", session.UserID)
+			assert.Equal("mushroom", session.Name)
+			assert.Equal(int64(19), session.Age)
 		})
 		handler.ServeHTTP(recorder, req)
 
@@ -104,143 +124,134 @@ func TestRedisStore(t *testing.T) {
 
 	t.Run("RedisStore donn't override old value when seting same value that should be", func(t *testing.T) {
 		assert := assert.New(t)
-		req, err := http.NewRequest("GET", "/", nil)
+		req, _ := http.NewRequest("GET", "/", nil)
 		recorder := httptest.NewRecorder()
 
 		store := sessionredis.New()
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r)
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
 
-			session.Values["name"] = "mushroom"
-			session.Values["num"] = 99
+			session.UserID = "1234654"
+			session.Name = "mushroom"
+			session.Age = 19
+
 			session.Save()
-			assert.Nil(err)
-
 		})
 		handler.ServeHTTP(recorder, req)
 
-		//======reuse=====
-		cookies, err := getCookie(cookiekey, recorder)
-		assert.Nil(err)
-		assert.NotNil(cookies.Value)
-		req, err = http.NewRequest("GET", "/", nil)
-		req.AddCookie(cookies)
+		//====== reuse session =====
+		req, _ = http.NewRequest("GET", "/", nil)
+		migrateCookies(recorder, req)
 
 		store = sessionredis.New()
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r)
+
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+
+			assert.Equal("1234654", session.UserID)
+			assert.Equal("mushroom", session.Name)
+			assert.Equal(int64(19), session.Age)
+			session.UserID = "1234654"
+			session.Name = "mushroom"
+			session.Age = 19
+
 			session.Save()
-			assert.Nil(err)
 		})
 		handler.ServeHTTP(recorder, req)
 	})
 	t.Run("RedisStore with sign session that should be", func(t *testing.T) {
-		store := sessionredis.New(&sessionredis.Options{
-			Keys: []string{"key"},
-		})
 		assert := assert.New(t)
 
 		recorder := httptest.NewRecorder()
-
 		req, _ := http.NewRequest("GET", "/", nil)
+
+		store := sessionredis.New()
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r)
-			session.Values["name"] = "mushroom"
-			session.Values["num"] = 99
+
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+
+			session.UserID = "1234654"
+			session.Name = "mushroom"
+			session.Age = 19
 			session.Save()
-			assert.Nil(err)
 
-			session, err = store.Get(cookieNewKey, w, r)
-			session.Values["name"] = "mushroom-n"
-			session.Values["num"] = 100
+			session = &Session{Meta: &sessions.Meta{}}
+			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys))
+
+			session.UserID = "12346543"
+			session.Name = "mushrooma"
+			session.Age = 20
 			session.Save()
-			assert.Nil(err)
 		})
 		handler.ServeHTTP(recorder, req)
 
-		//======reuse=====
-		store = sessionredis.New(&sessionredis.Options{
-			Keys: []string{"key"},
-		})
+		//====== reuse session =====
+
 		req, _ = http.NewRequest("GET", "/", nil)
-		cookies, _ := getCookie(cookiekey, recorder)
-		req.AddCookie(cookies)
-		cookies, _ = getCookie(cookiekey+".sig", recorder)
-		req.AddCookie(cookies)
+		migrateCookies(recorder, req)
 
-		cookies, _ = getCookie(cookieNewKey, recorder)
-		req.AddCookie(cookies)
-		cookies, _ = getCookie(cookieNewKey+".sig", recorder)
-		req.AddCookie(cookies)
-
-		store = sessionredis.New(&sessionredis.Options{
-			Keys: []string{"key"},
-		})
+		store = sessionredis.New()
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r)
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
 
-			assert.Nil(err)
-			assert.Equal("mushroom", session.Values["name"])
-			assert.Equal(float64(99), session.Values["num"])
+			assert.Equal("1234654", session.UserID)
+			assert.Equal("mushroom", session.Name)
+			assert.Equal(int64(19), session.Age)
 
-			session, err = store.Get(cookieNewKey, w, r)
-			assert.Nil(err)
-			assert.Equal("mushroom-n", session.Values["name"])
-			assert.Equal(float64(100), session.Values["num"])
+			session = &Session{Meta: &sessions.Meta{}}
+			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys))
 
-			session, err = store.Get(cookieNewKey+"new", w, r)
-			assert.Nil(err)
-			assert.Equal(0, len(session.Values))
+			assert.Equal("12346543", session.UserID)
+			assert.Equal("mushrooma", session.Name)
+			assert.Equal(int64(20), session.Age)
+
+			session = &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName+"new", session, cookie.New(w, r, SessionKeys))
+
+			assert.Equal(int64(0), session.Age)
+			assert.Equal("", session.UserID)
+			assert.Equal("", session.Name)
 
 		})
 		handler.ServeHTTP(recorder, req)
 
-		//======reuse=====
-		store = sessionredis.New(&sessionredis.Options{
-			Keys: []string{"key"},
-		})
+		//====== reuse session =====
 		req, _ = http.NewRequest("GET", "/", nil)
-		cookies, _ = getCookie(cookiekey, recorder)
-		req.AddCookie(cookies)
-		cookies, _ = getCookie(cookiekey+".sig", recorder)
-		req.AddCookie(cookies)
+		migrateCookies(recorder, req)
 
-		cookies, _ = getCookie(cookieNewKey, recorder)
-		req.AddCookie(cookies)
-		cookies, _ = getCookie(cookieNewKey+".sig", recorder)
-		req.AddCookie(cookies)
+		store = sessionredis.New()
 
-		store = sessionredis.New(&sessionredis.Options{
-			Keys: []string{"key"},
-		})
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := store.Get(cookiekey, w, r)
+			session := &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
 
-			assert.Nil(err)
-			assert.Equal("mushroom", session.Values["name"])
-			assert.Equal(float64(99), session.Values["num"])
+			assert.Equal("1234654", session.UserID)
+			assert.Equal("mushroom", session.Name)
+			assert.Equal(int64(19), session.Age)
 
-			session, err = store.Get(cookieNewKey, w, r)
-			assert.Nil(err)
-			assert.Equal("mushroom-n", session.Values["name"])
-			assert.Equal(float64(100), session.Values["num"])
+			session = &Session{Meta: &sessions.Meta{}}
+			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys))
 
-			session, err = store.Get(cookieNewKey+"new", w, r)
-			assert.Nil(err)
-			assert.Equal(0, len(session.Values))
+			assert.Equal("12346543", session.UserID)
+			assert.Equal("mushrooma", session.Name)
+			assert.Equal(int64(20), session.Age)
 
+			session = &Session{Meta: &sessions.Meta{}}
+			store.Load(SessionName+"new", session, cookie.New(w, r, SessionKeys))
+
+			assert.Equal(int64(0), session.Age)
+			assert.Equal("", session.UserID)
+			assert.Equal("", session.Name)
 		})
 		handler.ServeHTTP(recorder, req)
-
 	})
 }
-func getCookie(name string, recorder *httptest.ResponseRecorder) (*http.Cookie, error) {
-	var err error
-	res := &http.Response{Header: http.Header{"Set-Cookie": recorder.HeaderMap["Set-Cookie"]}}
-	for _, val := range res.Cookies() {
-		if val.Name == name {
-			return val, nil
-		}
+func migrateCookies(recorder *httptest.ResponseRecorder, req *http.Request) {
+	for _, cookie := range recorder.Result().Cookies() {
+		req.AddCookie(cookie)
 	}
-	return nil, err
 }

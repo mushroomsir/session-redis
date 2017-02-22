@@ -13,17 +13,22 @@ go get github.com/mushroomsir/session-redis
 ```
 ##Examples
 ```go
-go run examples/main.go
+go run example/main.go
 ```
 ##Usage
 ```go
+    SessionName := "Sess"
+	SessionKeys := []string{"keyxxx"}
+
     store := sessionredis.New()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	    session, _ := store.Get(sessionkey, w, r)
-		if val, ok := session.Values["name"]; ok {
-			println(val)
-		} else {
-			session.Values["name"] = "mushroom"
+	    session := &Session{Meta: &sessions.Meta{}}
+		store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+		if session.UserID == "" {
+			session.UserID = "x"
+			session.Name = "y"
+			session.Authed = 1
 		}
 		session.Save()
 	})
+```	
