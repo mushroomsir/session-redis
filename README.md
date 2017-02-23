@@ -23,7 +23,7 @@ go run example/main.go
     store := sessionredis.New()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 	    session := &Session{Meta: &sessions.Meta{}}
-		store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+		store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 		if session.UserID == "" {
 			session.UserID = "x"
 			session.Name = "y"

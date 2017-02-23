@@ -11,10 +11,6 @@ import (
 	redis "gopkg.in/redis.v5"
 )
 
-var (
-	lastSessionValue = "lastSessionValue"
-)
-
 // Options ...
 type Options struct {
 	Addr       string
@@ -73,27 +69,24 @@ func (c *RedisStore) Load(name string, session sessions.Sessions, cookie *cookie
 			err = sessions.Decode(result, &session)
 		}
 	}
-	session.Init(name, sid, cookie, c)
-	session.AddCache(lastSessionValue, result)
+	session.Init(name, sid, cookie, c, result)
 	return err
 }
 
 // Save session to Response's cookie
 func (c *RedisStore) Save(session sessions.Sessions) (err error) {
 	val, err := sessions.Encode(session)
-	if session.GetCache(lastSessionValue) == val || err != nil {
+	if err != nil || !session.IsChanged(val) {
 		return
 	}
-	session.AddCache(lastSessionValue, val)
 	sid := session.GetSID()
 	if sid == "" {
 		sid, _ = NewUUID()
 	}
 	err = c.client.Set(sid, val, c.opts.Expiration).Err()
-	if err != nil {
-		return
+	if err == nil {
+		session.GetCookie().Set(session.GetName(), sid, c.opts.opts)
 	}
-	session.GetCookie().Set(session.GetName(), sid, c.opts.opts)
 	return
 }
 

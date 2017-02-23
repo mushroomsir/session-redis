@@ -22,7 +22,7 @@ type Session struct {
 
 // Save ...
 func (s *Session) Save() error {
-	return s.SaveIt(s)
+	return s.GetStore().Save(s)
 }
 
 func TestRedisStore(t *testing.T) {
@@ -41,7 +41,7 @@ func TestRedisStore(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 			if session.UserID == "" {
 				session.UserID = "123465"
 				session.Name = "mushroom"
@@ -60,7 +60,7 @@ func TestRedisStore(t *testing.T) {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal("123465", session.UserID)
 			assert.Equal("mushroom", session.Name)
@@ -83,7 +83,7 @@ func TestRedisStore(t *testing.T) {
 
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 			if session.UserID == "" {
 				session.UserID = "1234654"
 				session.Name = "mushroom"
@@ -92,7 +92,7 @@ func TestRedisStore(t *testing.T) {
 			session.Save()
 
 			session = &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName+"error", session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName+"error", session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal(int64(0), session.Age)
 			assert.Equal("", session.UserID)
@@ -112,7 +112,7 @@ func TestRedisStore(t *testing.T) {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal("1234654", session.UserID)
 			assert.Equal("mushroom", session.Name)
@@ -130,7 +130,7 @@ func TestRedisStore(t *testing.T) {
 		store := sessionredis.New()
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 			session.UserID = "1234654"
 			session.Name = "mushroom"
@@ -148,7 +148,7 @@ func TestRedisStore(t *testing.T) {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal("1234654", session.UserID)
 			assert.Equal("mushroom", session.Name)
@@ -171,7 +171,7 @@ func TestRedisStore(t *testing.T) {
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 			session.UserID = "1234654"
 			session.Name = "mushroom"
@@ -179,7 +179,7 @@ func TestRedisStore(t *testing.T) {
 			session.Save()
 
 			session = &Session{Meta: &sessions.Meta{}}
-			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys...))
 
 			session.UserID = "12346543"
 			session.Name = "mushrooma"
@@ -196,21 +196,21 @@ func TestRedisStore(t *testing.T) {
 		store = sessionredis.New()
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal("1234654", session.UserID)
 			assert.Equal("mushroom", session.Name)
 			assert.Equal(int64(19), session.Age)
 
 			session = &Session{Meta: &sessions.Meta{}}
-			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal("12346543", session.UserID)
 			assert.Equal("mushrooma", session.Name)
 			assert.Equal(int64(20), session.Age)
 
 			session = &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName+"new", session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName+"new", session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal(int64(0), session.Age)
 			assert.Equal("", session.UserID)
@@ -227,21 +227,21 @@ func TestRedisStore(t *testing.T) {
 
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session := &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal("1234654", session.UserID)
 			assert.Equal("mushroom", session.Name)
 			assert.Equal(int64(19), session.Age)
 
 			session = &Session{Meta: &sessions.Meta{}}
-			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys))
+			store.Load(NewSessionName, session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal("12346543", session.UserID)
 			assert.Equal("mushrooma", session.Name)
 			assert.Equal(int64(20), session.Age)
 
 			session = &Session{Meta: &sessions.Meta{}}
-			store.Load(SessionName+"new", session, cookie.New(w, r, SessionKeys))
+			store.Load(SessionName+"new", session, cookie.New(w, r, SessionKeys...))
 
 			assert.Equal(int64(0), session.Age)
 			assert.Equal("", session.UserID)

@@ -19,7 +19,7 @@ type Session struct {
 
 // Save ...
 func (s *Session) Save() error {
-	return s.SaveIt(s)
+	return s.GetStore().Save(s)
 }
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 	store := sessionredis.New()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session := &Session{Meta: &sessions.Meta{}}
-		store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+		store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 		if session.UserID == "" {
 			session.UserID = "x"
 			session.Name = "y"
@@ -50,7 +50,7 @@ func main() {
 	store = sessionredis.New()
 	handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session := &Session{Meta: &sessions.Meta{}}
-		store.Load(SessionName, session, cookie.New(w, r, SessionKeys))
+		store.Load(SessionName, session, cookie.New(w, r, SessionKeys...))
 
 		println(session.UserID)
 		println(session.Name)
